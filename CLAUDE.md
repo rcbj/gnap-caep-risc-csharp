@@ -39,4 +39,4 @@ Omitted or `true` keeps CAEP and RISC on, and the resolved configuration omits `
 
 MIT. Copyright (c) 2026 Iya CyberSecurity Solutions, LLC.
 
-`develop` and `main` must be the same commit. Publishing is not set up.
+`develop` and `main` must be the same commit. A pull request merged into `main` publishes the package to nuget.org after the test workflow succeeds on that commit. A direct push does not. The key comes from nuget.org Trusted Publishing (`NuGet/login` trades the workflow's GitHub OIDC token for a one-hour API key); the `NUGET_USER` repository secret is the nuget.org profile name that owns the policy for this repository and `publish.yml`. A version already on nuget.org stays there; the next release is a new `Version` in the library's `.csproj`.
