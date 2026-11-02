@@ -8,7 +8,19 @@
     <PackageId>IyaSec.GnapCaepRisc</PackageId>
     <Version>0.1.0</Version>
     <Description>Server-side GNAP client with one CAEP and RISC poll receiver.</Description>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <Authors>Iya CyberSecurity Solutions, LLC</Authors>
+    <Copyright>2026 Iya CyberSecurity Solutions, LLC</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/rcbj/gnap-caep-risc-csharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/rcbj/gnap-caep-risc-csharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>gnap;caep;risc;ssf;oauth</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>
