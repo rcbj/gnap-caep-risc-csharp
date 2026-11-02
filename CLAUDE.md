@@ -13,8 +13,10 @@ var done = client.FinishRedirect(query, new[] { started.Pending.Id });
 ## Tests
 
 ```bash
-dotnet test
+docker build --target test .
 ```
+
+The `test` stage runs `dotnet test --nologo` in `mcr.microsoft.com/dotnet/sdk:8.0`. GitHub Actions uses that command. Do not run the .NET SDK on the host. The demo image does not run the suite.
 
 Tests use an in-process stub on 127.0.0.1. They do not need a live authorization server.
 
@@ -27,7 +29,7 @@ Tests use an in-process stub on 127.0.0.1. They do not need a live authorization
 
 ## Demo
 
-`dotnet run --project demo/IyaSec.GnapCaepRisc.Demo`. `PORT` defaults to 3000 and is the bind port. Loopback redirect and finish URLs follow `PORT`. `PUBLIC_URL` or `--public-url` replaces the origin and keeps the path. `GET /healthz` returns `ok`. `ssf.pollIntervalMs` is a millisecond interval.
+`docker compose up --build`. `PORT` defaults to 3000 and is the bind port. Loopback redirect and finish URLs follow `PORT`. `PUBLIC_URL` or `--public-url` replaces the origin and keeps the path. `GET /healthz` returns `ok`. `ssf.pollIntervalMs` is a millisecond interval.
 
 ## Signals
 

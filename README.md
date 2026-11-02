@@ -4,11 +4,13 @@ A server-side [GNAP](https://www.rfc-editor.org/rfc/rfc9635) client. The key is 
 
 The private key stays in this process. The same `gnap.json` shape as the Python and Node libraries loads: the JSON keys are identical.
 
-## Install from a checkout
+## Build and tests
 
 ```bash
-dotnet test
+docker build --target test .
 ```
+
+The `test` stage runs `dotnet test --nologo` in `mcr.microsoft.com/dotnet/sdk:8.0`. GitHub Actions uses that command. Do not run the .NET SDK on the host. The demo image does not run the suite.
 
 Package id: `IyaSec.GnapCaepRisc`. Namespace: `IyaSec.Gnap`. A NuGet push is not set up.
 
@@ -35,7 +37,7 @@ var done = client.FinishRedirect(query, new[] { started.Pending.Id });
 ## Demo
 
 ```bash
-dotnet run --project demo/IyaSec.GnapCaepRisc.Demo
+docker compose up --build
 ```
 
 `PORT` defaults to 3000 and is the bind port. Loopback finish and display URLs follow `PORT`. Any other host is left as written. `PUBLIC_URL` or `--public-url` replaces the origin and keeps the path. `GET /healthz` returns `ok`. The home page has a sign-in control; `/login` starts a grant, `/callback` finishes it, and `POST /logout` signs out.
