@@ -37,7 +37,7 @@ Tests use an in-process stub on 127.0.0.1. They do not need a live authorization
 
 ## Demo
 
-`docker compose up --build`. `PORT` defaults to 3000 and is the bind port. Loopback redirect and finish URLs follow `PORT`. `PUBLIC_URL` or `--public-url` replaces the origin and keeps the path. `GET /healthz` returns `ok`. `GET /live-status` returns `signedIn`, `subject`, `receiver`, and each accepted event's `type` and `jti`; it carries no tokens. A session-revoked event ends the cookie sessions whose grant the receiver tracked; one that matched no tracked session still ends the demo's only local session. `ssf.pollIntervalMs` is a millisecond interval.
+`docker compose up --build`. `PORT` defaults to 3000 and is the bind port. Loopback redirect and finish URLs follow `PORT`. `PUBLIC_URL` or `--public-url` replaces the origin and keeps the path. `GET /healthz` returns `ok`. Routes are ASP.NET Core endpoint routes (`MapGet`/`MapPost`), not an if-chain on the request method (CodeQL cs/user-controlled-bypass); a known path with another method answers 405. `GET /live-status` returns `signedIn`, `subject`, `receiver`, and each accepted event's `type` and `jti`; it carries no tokens. A session-revoked event ends the cookie sessions whose grant the receiver tracked; one that matched no tracked session still ends the demo's only local session. `ssf.pollIntervalMs` is a millisecond interval.
 
 ## Signals
 
