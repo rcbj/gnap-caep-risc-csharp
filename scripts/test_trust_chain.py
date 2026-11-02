@@ -85,6 +85,7 @@ class StubListener:
 
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(str(presented), str(work / "leaf.key"))
         self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
         self.origin = f"https://127.0.0.1:{self.server.server_address[1]}"
@@ -137,6 +138,7 @@ class TrustChainTests(unittest.TestCase):
         self.assertTrue(saved["anchor_fingerprint"])
         # The file is a trust store an OpenSSL-based verifier accepts for the listener as it is.
         context = ssl.create_default_context(cafile=files["tlsCa"])
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         port = int(stub.origin.rsplit(":", 1)[1])
         with socket.create_connection(("127.0.0.1", port), timeout=10) as raw:
             with context.wrap_socket(raw, server_hostname="127.0.0.1") as tls:

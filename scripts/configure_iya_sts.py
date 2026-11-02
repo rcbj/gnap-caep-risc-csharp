@@ -311,7 +311,9 @@ def _send(url, method, headers, body):
         outgoing["content-length"] = str(len(payload))
     try:
         if parts.scheme == "https":
-            conn = http.client.HTTPSConnection(parts.hostname, port, context=ssl._create_unverified_context(), timeout=15)
+            tls = ssl._create_unverified_context()
+            tls.minimum_version = ssl.TLSVersion.TLSv1_2
+            conn = http.client.HTTPSConnection(parts.hostname, port, context=tls, timeout=15)
         else:
             conn = http.client.HTTPConnection(parts.hostname, port, timeout=15)
         conn.request(method, path, body=payload, headers=outgoing)
