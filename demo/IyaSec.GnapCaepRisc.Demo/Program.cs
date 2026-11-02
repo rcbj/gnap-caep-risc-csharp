@@ -20,7 +20,18 @@ builder.Logging.ClearProviders();
 builder.WebHost.UseUrls("http://0.0.0.0:" + port);
 var app = builder.Build();
 Console.WriteLine("gnap-caep-risc demo on port " + port + ", configuration " + demo.ConfigPath);
-app.Run(demo.Handle);
+// Endpoint routing picks the handler by path and method, so no handler is chosen by comparing the
+// request's own method string in this code. A known path with another method answers 405.
+app.MapGet("/healthz", ctx => demo.Guard(ctx, DemoApp.Healthz));
+app.MapGet("/live-status", ctx => demo.Guard(ctx, demo.LiveStatus));
+app.MapGet("/styles.css", ctx => demo.Guard(ctx, c => demo.Static(c, "styles.css", "text/css; charset=utf-8")));
+app.MapGet("/app.js", ctx => demo.Guard(ctx, c => demo.Static(c, "app.js", "text/javascript; charset=utf-8")));
+app.MapGet("/", ctx => demo.Guard(ctx, demo.Home));
+app.MapGet("/login", ctx => demo.Guard(ctx, demo.Login));
+app.MapGet("/callback", ctx => demo.Guard(ctx, demo.Callback));
+app.MapPost("/logout", ctx => demo.Guard(ctx, demo.Logout));
+app.MapPost("/gnap/push", ctx => demo.Guard(ctx, demo.Push));
+app.MapFallback(ctx => demo.Guard(ctx, demo.NotFound));
 app.Run();
 
 static (string Url, bool Given) PublicUrl(string[] argv)
@@ -68,27 +79,12 @@ sealed class DemoApp
         this.port = port;
     }
 
-    public async Task Handle(HttpContext ctx)
+    // Runs one routed handler; an unexpected error is logged and answered with a page.
+    public async Task Guard(HttpContext ctx, Func<HttpContext, Task> handler)
     {
         try
         {
-            var path = ctx.Request.Path.Value ?? "/";
-            if (path == "/healthz" && ctx.Request.Method == "GET")
-            {
-                ctx.Response.ContentType = "text/plain";
-                ctx.Response.StatusCode = 200;
-                await ctx.Response.WriteAsync("ok");
-                return;
-            }
-            if (path == "/live-status" && ctx.Request.Method == "GET") { await LiveStatus(ctx); return; }
-            if (path == "/styles.css" && ctx.Request.Method == "GET") { await Static(ctx, "styles.css", "text/css; charset=utf-8"); return; }
-            if (path == "/app.js" && ctx.Request.Method == "GET") { await Static(ctx, "app.js", "text/javascript; charset=utf-8"); return; }
-            if (path == "/" && ctx.Request.Method == "GET") { await Home(ctx); return; }
-            if (path == "/login" && ctx.Request.Method == "GET") { await Login(ctx); return; }
-            if (path == "/callback" && ctx.Request.Method == "GET") { await Callback(ctx); return; }
-            if (path == "/logout" && ctx.Request.Method == "POST") { await Logout(ctx); return; }
-            if (path == "/gnap/push" && ctx.Request.Method == "POST") { await Push(ctx); return; }
-            await Html(ctx, 404, "Not found", "<h1>Not found</h1>", null);
+            await handler(ctx);
         }
         catch (Exception err)
         {
@@ -97,9 +93,18 @@ sealed class DemoApp
         }
     }
 
+    public static async Task Healthz(HttpContext ctx)
+    {
+        ctx.Response.ContentType = "text/plain";
+        ctx.Response.StatusCode = 200;
+        await ctx.Response.WriteAsync("ok");
+    }
+
+    public Task NotFound(HttpContext ctx) => Html(ctx, 404, "Not found", "<h1>Not found</h1>", null);
+
     // JSON for scripts/live_iya_sts.py: whether this browser is signed in, as whom, the receiver's
     // state, and the type and jti of every event received. It carries no tokens.
-    async Task LiveStatus(HttpContext ctx)
+    public async Task LiveStatus(HttpContext ctx)
     {
         var opened = Session(ctx);
         string subject = null;
@@ -175,7 +180,7 @@ sealed class DemoApp
         }
     }
 
-    async Task Static(HttpContext ctx, string name, string contentType)
+    public async Task Static(HttpContext ctx, string name, string contentType)
     {
         var full = Path.Combine(publicDir, name);
         if (!File.Exists(full)) { await Html(ctx, 404, "Not found", "<h1>Not found</h1>", null); return; }
@@ -184,7 +189,7 @@ sealed class DemoApp
         await ctx.Response.WriteAsync(await File.ReadAllTextAsync(full));
     }
 
-    async Task Home(HttpContext ctx)
+    public async Task Home(HttpContext ctx)
     {
         var opened = Session(ctx);
         if (opened.Person != null)
@@ -207,7 +212,7 @@ sealed class DemoApp
         await Html(ctx, 200, "GNAP demo", body, null);
     }
 
-    async Task Login(HttpContext ctx)
+    public async Task Login(HttpContext ctx)
     {
         GnapClient current;
         try { current = Client(); }
@@ -232,7 +237,7 @@ sealed class DemoApp
         ctx.Response.StatusCode = 302;
     }
 
-    async Task Callback(HttpContext ctx)
+    public async Task Callback(HttpContext ctx)
     {
         var pending = Unseal(Cookie(ctx, "gpending"));
         var ids = new List<string>();
@@ -279,7 +284,7 @@ sealed class DemoApp
         await Task.CompletedTask;
     }
 
-    async Task Logout(HttpContext ctx)
+    public async Task Logout(HttpContext ctx)
     {
         var opened = Unseal(Cookie(ctx, "gsid"));
         if (opened != null && opened["id"]?.GetValue<string>() is string id)
@@ -307,7 +312,7 @@ sealed class DemoApp
         await Task.CompletedTask;
     }
 
-    async Task Push(HttpContext ctx)
+    public async Task Push(HttpContext ctx)
     {
         var raw = await new StreamReader(ctx.Request.Body).ReadToEndAsync();
         try
