@@ -26,7 +26,7 @@ Tests use an in-process stub on 127.0.0.1. They do not need a live authorization
 
 ## The iya-sts TLS listener CA trust chain
 
-`tlsCa` (default `generated/idp-ca.pem`, relative to `demo/`) is set by the install script, which writes the whole chain from `GET /tls/server-certificate` (leaf, TLS Issuing CA, Intermediate, Root; the handshake's chain as a fallback) to that file. The demo image carries it from build time: `.dockerignore` admits only that file under `demo/generated`, and `COPY demo demo` takes it in; a build without it (CI, a fresh clone) succeeds. Rebuild the image after running the install script against a different iya-sts. The entrypoint refresh at start stays, but is not the only way the chain gets in.
+`tlsCa` (default `generated/idp-ca.pem`, relative to `demo/`) is set by the install script, which writes the whole chain from `GET /tls/server-certificate` (leaf, TLS Issuing CA, Intermediate, Root; the handshake's chain as a fallback) to that file. The demo image carries it from build time: `.dockerignore` admits only that file under `demo/generated`, and `COPY demo demo` takes it in; a build without it (CI, a fresh clone) succeeds. Rebuild the image after running the install script against a different iya-sts. The refresh at start stays, but is not the only way the chain gets in; `TLS_CA_REFRESH=0` turns it off, and the live script runs the demo that way and reports `tlsCaInImage`.
 
 ## Layout
 

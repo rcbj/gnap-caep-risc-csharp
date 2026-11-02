@@ -35,4 +35,7 @@ EXPOSE 3000
 ENV PORT=3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s \
   CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${PORT}/healthz').read()" || exit 1
-CMD ["sh", "-c", "python3 scripts/trust_chain.py --config \"${GNAP_CONFIG:-demo/gnap.json}\" || true; exec dotnet /app/IyaSec.GnapCaepRisc.Demo.dll"]
+# At start the chain is refreshed from iya-sts into the tlsCa file, keeping the built-in one when that
+# fails. TLS_CA_REFRESH=0 turns the refresh off, so the chain is the one the image was built with.
+ENV TLS_CA_REFRESH=1
+CMD ["sh", "-c", "if [ \"${TLS_CA_REFRESH}\" != 0 ]; then python3 scripts/trust_chain.py --config \"${GNAP_CONFIG:-demo/gnap.json}\" || true; fi; exec dotnet /app/IyaSec.GnapCaepRisc.Demo.dll"]

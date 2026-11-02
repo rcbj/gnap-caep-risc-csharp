@@ -21,7 +21,9 @@ the host. The order is the one a person follows, in a copy of the repository
    on the host), registers the demo and writes iya-sts's listener CA trust
    chain to the file demo/gnap.json's `tlsCa` names, demo/generated/idp-ca.pem;
 3. the demo image is built, and carries that chain from build time;
-4. the demo image runs with only the client key and certificate mounted.
+4. the demo image runs with only the client key and certificate mounted, and
+   with the start-time refresh off (TLS_CA_REFRESH=0), so the demo trusts
+   iya-sts through the chain the image was built with.
 
 This script does not fetch the CA for the demo, rewrite tlsCa, or mount a CA
 over it. It reads the saved chain for its own HTTPS client, and checks that the
@@ -708,7 +710,7 @@ def main():
         if baked.returncode != 0 or baked.stdout != tls_ca.read_bytes():
             raise RuntimeError(f"the demo image does not carry the saved trust chain at /app/demo/{raw['tlsCa']}")
         print(f"the demo image carries the trust chain at /app/demo/{raw['tlsCa']}", flush=True)
-        # 4. The demo runs with only the client key and certificate mounted.
+        # 4. The demo runs with only the client key and certificate mounted, and no refresh at start.
         docker_rm(demo_name)
         docker(
             "run", "-d", "--name", demo_name, "--network", "host",
@@ -716,6 +718,7 @@ def main():
             "-v", f"{demo_dir / 'generated' / 'client.crt'}:/app/demo/generated/client.crt:ro",
             "-e", f"PORT={demo_port}",
             "-e", f"PUBLIC_URL={demo_origin}",
+            "-e", "TLS_CA_REFRESH=0",
             image,
         )
         deadline = time.time() + 90
@@ -767,7 +770,12 @@ def main():
             ),
             "session-revoked to end the local session",
         )
-        print(json.dumps({"ok": True, "subject": signed_in.get("subject"), "events": finished.get("events")}, indent=2))
+        print(json.dumps({
+            "ok": True,
+            "subject": signed_in.get("subject"),
+            "tlsCaInImage": True,
+            "events": finished.get("events"),
+        }, indent=2))
     finally:
         docker_rm(demo_name)
         if sts_name:
