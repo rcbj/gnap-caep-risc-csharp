@@ -12,7 +12,7 @@ docker build --target test .
 
 The `test` stage runs `dotnet test --nologo` in `mcr.microsoft.com/dotnet/sdk:8.0`. GitHub Actions uses that command. Do not run the .NET SDK on the host. The demo image does not run the suite.
 
-Package id: `IyaSec.GnapCaepRisc`. Namespace: `IyaSec.Gnap`. A NuGet push is not set up.
+Package id: `IyaSec.GnapCaepRisc`. Namespace: `IyaSec.Gnap`. A pull request merged into `main` publishes the package to nuget.org after the test workflow succeeds on that commit. A direct push does not. The key comes from nuget.org Trusted Publishing (`NuGet/login` trades the workflow's GitHub OIDC token for a one-hour API key); the `NUGET_USER` repository secret is the nuget.org profile name that owns the policy for this repository and `publish.yml`. A version already on nuget.org stays there; the next release is a new `Version` in the library's `.csproj`.
 
 ## Three calls
 
