@@ -6,5 +6,6 @@ services:
     environment:
       PORT: ${PORT:-3000}
     volumes:
-      - ./demo/generated:/app/demo/generated
+      - ./demo/generated/client.key:/app/demo/generated/client.key:ro
+      - ./demo/generated/client.crt:/app/demo/generated/client.crt:ro
     stop_grace_period: 5s
