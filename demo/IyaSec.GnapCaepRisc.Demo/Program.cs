@@ -52,6 +52,9 @@ sealed class DemoApp
     readonly Dictionary<string, (Person Person, Grant Grant)> sessions = new();
     SignalsReceiver receiver;
     Grant latest;
+    // For GET /live-status: the receiver's state, and the type and jti of each event it accepted. No tokens.
+    string receiverState = "not started (no sign-in yet)";
+    readonly List<(string Type, string Jti)> liveEvents = new();
 
     public DemoApp(string publicUrl, bool given, string port)
     {
@@ -77,6 +80,7 @@ sealed class DemoApp
                 await ctx.Response.WriteAsync("ok");
                 return;
             }
+            if (path == "/live-status" && ctx.Request.Method == "GET") { await LiveStatus(ctx); return; }
             if (path == "/styles.css" && ctx.Request.Method == "GET") { await Static(ctx, "styles.css", "text/css; charset=utf-8"); return; }
             if (path == "/app.js" && ctx.Request.Method == "GET") { await Static(ctx, "app.js", "text/javascript; charset=utf-8"); return; }
             if (path == "/" && ctx.Request.Method == "GET") { await Home(ctx); return; }
@@ -90,6 +94,84 @@ sealed class DemoApp
         {
             Console.WriteLine(err);
             await Html(ctx, 500, "Error", "<h1>Something went wrong</h1><p>" + WebUtility.HtmlEncode(err.Message) + "</p><p><a href=\"/\">Home</a></p>", null);
+        }
+    }
+
+    // JSON for scripts/live_iya_sts.py: whether this browser is signed in, as whom, the receiver's
+    // state, and the type and jti of every event received. It carries no tokens.
+    async Task LiveStatus(HttpContext ctx)
+    {
+        var opened = Session(ctx);
+        string subject = null;
+        if (opened.Person != null)
+        {
+            var person = opened.Person;
+            subject = new[] { person.PreferredUsername, person.Email, person.Name, person.Sub }.FirstOrDefault(value => !string.IsNullOrEmpty(value));
+        }
+        var events = new JsonArray();
+        string state;
+        lock (gate)
+        {
+            foreach (var item in liveEvents) events.Add(new JsonObject { ["type"] = item.Type, ["jti"] = item.Jti });
+            state = receiverState;
+        }
+        var body = new JsonObject
+        {
+            ["signedIn"] = opened.Person != null,
+            ["subject"] = subject,
+            ["receiver"] = state,
+            ["events"] = events
+        };
+        ctx.Response.ContentType = "application/json";
+        ctx.Response.Headers.CacheControl = "no-store";
+        ctx.Response.StatusCode = 200;
+        await ctx.Response.WriteAsync(body.ToJsonString());
+    }
+
+    // The id the receiver knows a session by: the grant id, or the subject.
+    static string TrackedId(Grant grant, Person person)
+    {
+        if (!string.IsNullOrEmpty(grant?.GrantId)) return grant.GrantId;
+        return person?.Sub ?? grant?.Subject?.Sub ?? "";
+    }
+
+    // Ends every cookie session whose grant the receiver tracks under one of ids. The cookie id and the
+    // tracked id differ, so this looks the sessions up by grant.
+    void EndTracked(IReadOnlyList<string> ids)
+    {
+        lock (gate)
+        {
+            foreach (var local in sessions.Keys.ToList())
+            {
+                var known = TrackedId(sessions[local].Grant, sessions[local].Person);
+                if (known != "" && ids.Contains(known)) sessions.Remove(local);
+            }
+        }
+    }
+
+    // Records an accepted event for /live-status. A session-revoked event that ended no tracked session
+    // still ends this demo's one local session, if it has exactly one: the event can name the sign-on
+    // session by an id the grant did not carry.
+    void Remember(SignalEvent signal)
+    {
+        string orphan = null;
+        SignalsReceiver current;
+        lock (gate)
+        {
+            liveEvents.Add((signal.Type, signal.Jti));
+            if (liveEvents.Count > 100) liveEvents.RemoveRange(0, liveEvents.Count - 100);
+            if (signal.Type == Events.SessionRevoked && !signal.Ended && sessions.Count == 1)
+            {
+                var only = sessions.First();
+                orphan = TrackedId(only.Value.Grant, only.Value.Person);
+                sessions.Remove(only.Key);
+            }
+            current = receiver;
+        }
+        if (orphan != null)
+        {
+            Console.WriteLine("ssf: session-revoked matched no tracked session; ending this demo's one local session");
+            if (current != null && orphan != "") current.Untrack(orphan);
         }
     }
 
@@ -289,13 +371,23 @@ sealed class DemoApp
 
     void Watch(Grant grant, Person person)
     {
+        SignalsReceiver running;
         lock (gate)
         {
             latest = grant;
-            if (receiver != null) return;
+            running = receiver;
+        }
+        if (running != null)
+        {
+            running.Track(Sessions.FromPerson(TrackedId(grant, person), person, grant.ExpiresAt));
+            return;
         }
         var wanted = SignalsWanted();
-        if (wanted == null) return;
+        if (wanted == null)
+        {
+            lock (gate) receiverState = "not configured (signals are off, or no ssf.transmitter)";
+            return;
+        }
         var interval = 5000;
         if (wanted["pollIntervalMs"] is JsonValue ms && ms.TryGetValue<int>(out var parsed) && parsed != 0) interval = parsed;
         else if (wanted["pollIntervalMs"] is JsonValue num && num.TryGetValue<double>(out var dbl) && dbl != 0) interval = (int)dbl;
@@ -306,10 +398,7 @@ sealed class DemoApp
         SignalsReceiver opened;
         try
         {
-            opened = new SignalsReceiver(transmitter, (ids, _) =>
-            {
-                lock (gate) foreach (var id in ids) sessions.Remove(id);
-            }, new ReceiverOpt
+            opened = new SignalsReceiver(transmitter, (ids, _) => EndTracked(ids), new ReceiverOpt
             {
                 Tls = current.Tls(),
                 PollIntervalMs = interval,
@@ -322,13 +411,21 @@ sealed class DemoApp
                     catch { return new Dictionary<string, string>(); }
                 }
             });
+            opened.On("*", Remember);
             opened.Start();
         }
-        catch (Exception err) { Console.WriteLine("ssf: not started: " + err.Message); return; }
-        var local = grant.GrantId;
-        if (string.IsNullOrEmpty(local)) local = person.Sub;
-        opened.Track(Sessions.FromPerson(local, person, grant.ExpiresAt));
-        lock (gate) receiver = opened;
+        catch (Exception err)
+        {
+            Console.WriteLine("ssf: not started: " + err.Message);
+            lock (gate) receiverState = "not running: " + err.Message;
+            return;
+        }
+        opened.Track(Sessions.FromPerson(TrackedId(grant, person), person, grant.ExpiresAt));
+        lock (gate)
+        {
+            receiver = opened;
+            receiverState = "polling stream " + (opened.Stream?["stream_id"]?.ToString() ?? "") + " at " + transmitter;
+        }
     }
 
     (Person Person, Grant Grant) Session(HttpContext ctx)
