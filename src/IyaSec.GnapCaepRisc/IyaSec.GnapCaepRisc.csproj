@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <RootNamespace>IyaSec.Gnap</RootNamespace>
     <PackageId>IyaSec.GnapCaepRisc</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Description>Server-side GNAP client with one CAEP and RISC poll receiver.</Description>
     <IsPackable>true</IsPackable>
     <Authors>Iya CyberSecurity Solutions, LLC</Authors>
