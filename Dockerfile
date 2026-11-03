@@ -23,7 +23,7 @@ RUN dotnet publish demo/IyaSec.GnapCaepRisc.Demo/IyaSec.GnapCaepRisc.Demo.csproj
 # The runtime without the demo: python3 for the scripts, openssl for the client key.
 # scripts/live_iya_sts.py makes the key in this stage (`--target tools`) before the install script runs,
 # because the install script registers the key and must run before the demo image is built.
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS tools
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS tools
 RUN apt-get update && apt-get install -y --no-install-recommends python3 openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY scripts scripts
