@@ -7,7 +7,7 @@
 # and nothing else under demo/generated (the client key and certificate stay out, and are mounted). A
 # build before the install script has run (CI, a fresh clone) has no chain file and still succeeds: the
 # same COPY simply finds none. Rebuild after running the install script against another iya-sts.
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS test
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS test
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV DOTNET_NOLOGO=1
 RUN apt-get update && apt-get install -y --no-install-recommends python3 openssl && rm -rf /var/lib/apt/lists/*
@@ -15,7 +15,7 @@ WORKDIR /src
 COPY . .
 RUN dotnet test --nologo && python3 -m unittest discover -s scripts -p 'test_*.py' -v
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
 RUN dotnet publish demo/IyaSec.GnapCaepRisc.Demo/IyaSec.GnapCaepRisc.Demo.csproj -c Release -o /out --nologo
@@ -23,7 +23,7 @@ RUN dotnet publish demo/IyaSec.GnapCaepRisc.Demo/IyaSec.GnapCaepRisc.Demo.csproj
 # The runtime without the demo: python3 for the scripts, openssl for the client key.
 # scripts/live_iya_sts.py makes the key in this stage (`--target tools`) before the install script runs,
 # because the install script registers the key and must run before the demo image is built.
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS tools
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS tools
 RUN apt-get update && apt-get install -y --no-install-recommends python3 openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY scripts scripts

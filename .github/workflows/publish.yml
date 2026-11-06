@@ -67,7 +67,7 @@ jobs:
             -w /src \
             -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
             -e DOTNET_NOLOGO=1 \
-            mcr.microsoft.com/dotnet/sdk:8.0 \
+            mcr.microsoft.com/dotnet/sdk:10.0 \
             dotnet pack "$PROJECT" -c Release -o /src/artifacts \
               -p:ContinuousIntegrationBuild=true
           python3 - <<'PY'
@@ -122,5 +122,5 @@ jobs:
             -e PACKAGE \
             -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
             -e DOTNET_NOLOGO=1 \
-            mcr.microsoft.com/dotnet/sdk:8.0 \
+            mcr.microsoft.com/dotnet/sdk:10.0 \
             sh -c 'dotnet nuget push "$PACKAGE" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json'

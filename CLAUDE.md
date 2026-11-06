@@ -16,7 +16,7 @@ var done = client.FinishRedirect(query, new[] { started.Pending.Id });
 docker build --target test .
 ```
 
-The `test` stage runs `dotnet test --nologo` in `mcr.microsoft.com/dotnet/sdk:8.0`. GitHub Actions uses that command. Do not run the .NET SDK on the host. The demo image does not run the suite.
+The `test` stage runs `dotnet test --nologo` in `mcr.microsoft.com/dotnet/sdk:10.0`. GitHub Actions uses that command. Do not run the .NET SDK on the host. The demo image does not run the suite.
 
 Tests use an in-process stub on 127.0.0.1. They do not need a live authorization server. The test stage also runs `python3 -m unittest discover -s scripts -p 'test_*.py'`: `scripts/test_trust_chain.py` holds that the install script writes the whole listener chain to the `tlsCa` file; `scripts/test_password_file.py` holds that a generated test-user password goes to `demo/generated/<user>.password`, created 0600, and is never printed (only the path is). `TlsTests` holds that the library accepts that file as its trust store, and that the mtls proof presents its self-signed certificate when the server's CertificateRequest names only another CA (.NET sends it; Go did not, and needed a fix).
 

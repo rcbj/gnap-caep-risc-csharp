@@ -104,7 +104,10 @@ public class TlsTests
             RemoteCertificateValidationCallback = (_, _, _, _) => true,
             LocalCertificateSelectionCallback = (_, _, _, _, issuers) =>
             {
-                if (issuers != null && issuers.Length > 0) seen = issuers;
+                // Called once before the handshake, with no issuers. A certificate returned then is
+                // used without a second call, so hold it back until the server has named its CAs.
+                if (issuers == null || issuers.Length == 0) return null;
+                seen = issuers;
                 return cert;
             }
         });
