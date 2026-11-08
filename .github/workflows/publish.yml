@@ -9,24 +9,32 @@ on:
 permissions:
   contents: read
 
+# One release at a time: each reads the version the one before it took.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   publish:
-    # The test workflow has already succeeded for this commit on main.
-    # Publish only when that commit is a pull request merged into main.
-    # A direct push stays unpublished. The checkout is the commit the
-    # tests ran, and a version already on nuget.org is left there.
+    # The test workflow has already succeeded for this commit on main. Release
+    # only when that commit is a pull request merged into main; a direct push
+    # stays unreleased. .github/scripts/release_decision.py picks the version:
+    # VERSION when it is ahead of what is published, one patch higher when the
+    # shipped files changed since the last release's tag, and otherwise no
+    # release at all, so a change to tests, the demo, or the docs ships nothing.
+    # The version is written into this workspace only and is never committed.
     #
-    # The API key comes from nuget.org Trusted Publishing: NuGet/login
-    # trades this job's GitHub OIDC token for a key that lasts one hour.
-    # nuget.org must hold a policy for this repository and publish.yml,
-    # and the NUGET_USER secret is the profile name that owns it.
+    # The API key comes from nuget.org Trusted Publishing: NuGet/login trades
+    # this job's GitHub OIDC token for a key that lasts one hour. nuget.org must
+    # hold a policy for this repository and publish.yml, and the NUGET_USER
+    # secret is the profile name that owns it.
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: read
       id-token: write
     env:
@@ -50,15 +58,27 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      # Every tag: the last release's tag is what the decision compares with.
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.publish == 'true'
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Decide whether this commit is a release
+        id: decide
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python3 .github/scripts/release_decision.py decide nuget IyaSec.GnapCaepRisc "$SHA" src/IyaSec.GnapCaepRisc
 
       - name: Pack the library
         id: pack
-        if: steps.gate.outputs.publish == 'true'
+        if: steps.decide.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
         run: |
           set -eu
           mkdir -p artifacts
@@ -69,47 +89,22 @@ jobs:
             -e DOTNET_NOLOGO=1 \
             mcr.microsoft.com/dotnet/sdk:10.0 \
             dotnet pack "$PROJECT" -c Release -o /src/artifacts \
-              -p:ContinuousIntegrationBuild=true
-          python3 - <<'PY'
-          import glob, os, urllib.error, urllib.request, zipfile
-          import xml.etree.ElementTree as ET
-          pkgs = glob.glob("artifacts/*.nupkg")
-          if len(pkgs) != 1:
-              raise SystemExit("expected one package, found %r" % pkgs)
-          pkg = pkgs[0]
-          with zipfile.ZipFile(pkg) as z:
-              spec = [n for n in z.namelist() if n.endswith(".nuspec")][0]
-              root = ET.fromstring(z.read(spec))
-          meta = root.find("{*}metadata")
-          pid = meta.find("{*}id").text
-          ver = meta.find("{*}version").text
-          lid, lver = pid.lower(), ver.lower()
-          url = ("https://api.nuget.org/v3-flatcontainer/%s/%s/%s.nuspec"
-                 % (lid, lver, lid))
-          try:
-              urllib.request.urlopen(url)
-              exists = True
-          except urllib.error.HTTPError as e:
-              if e.code != 404:
-                  raise SystemExit("nuget.org returned %d for %s %s"
-                                   % (e.code, pid, ver))
-              exists = False
-          if exists:
-              print("%s %s is already on nuget.org." % (pid, ver))
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write("package=%s\n" % pkg)
-              fh.write("push=%s\n" % ("false" if exists else "true"))
-          PY
+              -p:ContinuousIntegrationBuild=true -p:Version="$VERSION"
+          package=$(ls artifacts/*.nupkg)
+          case "$package" in
+            *"$VERSION.nupkg") echo "package=$package" >> "$GITHUB_OUTPUT" ;;
+            *) echo "expected one package of $VERSION, found $package"; exit 1 ;;
+          esac
 
       - name: Trade the OIDC token for a nuget.org API key
         id: login
-        if: steps.pack.outputs.push == 'true'
+        if: steps.decide.outputs.release == 'true'
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Push the package
-        if: steps.pack.outputs.push == 'true'
+        if: steps.decide.outputs.release == 'true'
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
           PACKAGE: ${{ steps.pack.outputs.package }}
@@ -124,3 +119,14 @@ jobs:
             -e DOTNET_NOLOGO=1 \
             mcr.microsoft.com/dotnet/sdk:10.0 \
             sh -c 'dotnet nuget push "$PACKAGE" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json'
+
+      # Publishing and this step are one release: the tag it creates is the
+      # baseline the next decision compares with.
+      - name: Create the tag and the GitHub Release
+        if: steps.decide.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" --title "$TAG" --generate-notes
